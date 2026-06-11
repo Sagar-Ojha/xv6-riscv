@@ -3,6 +3,12 @@
 #include "kernel/stat.h"
 #include "kernel/fs.h"
 #include "kernel/fcntl.h"
+#include <stdbool.h>
+
+static bool execOption = false;  // Flag for handling exec option. Set to "true" if "-exec" is found
+static char* execCmd;       // Points to the command exec takes
+static char cmdArg[512];    // At max, 512 bytes "should" be passed as the argument to the process run by exec
+                            // TODO: Implement overflow protection
 
 int findFile(char* path, char* fileName)
 {
@@ -68,7 +74,33 @@ int findFile(char* path, char* fileName)
 
                         if (strcmp(dirEntryName, fileName) == 0)
                         {
-                            fprintf(2, "%s\n", dirEntryPath);
+                            // Support for exec option
+                            if (execOption)
+                            {
+                                int pid= fork();
+
+                                if (pid > 0)
+                                {
+                                    // Wait for the child to finish up
+                                    wait(0);
+                                }
+                                else if (pid == 0)
+                                {
+                                    // Start the new program
+                                    char* execArgv[] = {execCmd, cmdArg, dirEntryPath, 0};
+                                    exec(execCmd, execArgv);
+                                }
+                                else
+                                {
+                                    fprintf(2, "Fork failed");
+                                    return -1;
+                                }
+                            }
+                            else
+                            {
+                                // Simply print the path
+                                fprintf(2, "%s\n", dirEntryPath);
+                            }
                         }
 
                         findFile(dirEntryPath, fileName);
@@ -89,10 +121,50 @@ int findFile(char* path, char* fileName)
 
 int main(int argc, char* argv[])
 {
-    if (argc != 3)
+    if (argc < 3)
     {
-        fprintf(2, "Need exactly 2 arguments but passed %d\n", argc-1);
+        fprintf(2, "Need at least 2 arguments but passed %d\n", argc-1);
         return -1;
+    }
+    else if(argc > 3)
+    {
+        // Only process exec
+        if (strcmp(argv[3], "-exec") == 0)
+        {
+            execOption = true;
+
+            if ((argc - 4) <= 0)
+            {
+                fprintf(2, "Missing the actual command\n");
+                return -1;
+            }
+            else
+            {
+                execCmd = argv[4];
+
+                // Build part of second arg to execCmd
+                // In other words, stich the args into one arg
+                {
+                    char* currChar = cmdArg;
+
+                    for (int i = 5; i < argc; ++i)  // Args start at argv[5]
+                    {
+                        // TODO: Check for overflow before these actions
+                        strcpy(currChar, argv[i]);
+                        currChar += strlen(argv[i]);
+
+                        // Overwrite the copied '\0' with ' ' while stitching the args
+                        // Note that we still need the arg to be null terminated
+                        if (i < (argc - 1))
+                        {
+                            *(currChar) = ' ';
+                        }
+
+                        ++currChar;
+                    }
+                }
+            }
+        }
     }
 
     return findFile(argv[1], argv[2]);
