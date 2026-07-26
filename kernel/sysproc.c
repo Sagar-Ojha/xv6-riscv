@@ -107,3 +107,21 @@ sys_uptime(void)
   release(&tickslock);
   return xticks;
 }
+
+uint64
+sys_interpose(void)
+{
+  int n;
+  argint(0, &n);
+
+  if (n < 0){ return -1; }
+
+  myproc()->blockedSyscalls = (uint64)n;
+
+  if (fetchstr(myproc()->trapframe->a1, myproc()->allowedPath, sizeof(myproc()->allowedPath)) == -1)
+  {
+    return -1;
+  }
+
+  return 0;
+}

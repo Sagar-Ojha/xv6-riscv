@@ -302,6 +302,13 @@ kfork(void)
   np->state = RUNNABLE;
   release(&np->lock);
 
+  acquire(&np->lock);
+  np->blockedSyscalls = p->blockedSyscalls;
+
+  np->allowedPath[0] = '\0';
+  safestrcpy(np->allowedPath, p->allowedPath, sizeof(p->allowedPath));  // will null terminate
+  release(&np->lock);
+
   return pid;
 }
 
